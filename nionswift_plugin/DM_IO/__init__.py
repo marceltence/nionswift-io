@@ -21,13 +21,15 @@ class DM3IODelegate(object):
         self.__api = api
         self.io_handler_id = "dm-io-handler"
         self.io_handler_name = _("DigitalMicrograph Files")
-        self.io_handler_extensions = ["dm3", "dm4"]
+        self.io_handler_extensions = ["dm4", "dm3"]
 
     def read_data_and_metadata(self, extension, file_path):
         return dm3_image_utils.load_image(file_path)
 
     def can_write_data_and_metadata(self, data_and_metadata, extension):
-        return extension == "dm3"
+        # return extension == "dm3"
+        # Marcel: writing dm4 is now possible
+        return any(extension == dm for dm in self.io_handler_extensions)
 
     def write_data_and_metadata(self, data_and_metadata, file_path, extension):
         data = data_and_metadata.data

@@ -17,6 +17,7 @@ import datetime
 import pprint
 import numpy
 import typing
+import time
 
 from nion.data import Calibration
 from nion.data import DataAndMetadata
@@ -133,7 +134,11 @@ def ndarray_to_imagedatadict(nparr):
             ret["Data"] = parse_dm3.structarray(types)
             ret["Data"].raw_data = bytes(numpy.array(nparr, copy=False).data)
         else:
-            ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), numpy.array(nparr, copy=False).flatten())
+            #can save a lot of time if one can avoid this step and using directly ndarray.tobytes() from numpy.
+            #this means passing the numpy array to parse_dm3
+            #quite a few number of modifications in parse_dm3.
+            # ret["Data"] = parse_dm3.array.array(platform_independent_char(nparr.dtype), numpy.array(nparr, copy=False).flatten())
+            ret["Data"] = nparr
     return ret
 
 
@@ -178,6 +183,7 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
     if isinstance(file, str) or isinstance(file, str):
         with open(file, "rb") as f:
             return load_image(f)
+    start_time = time.time()
     dmtag = parse_dm3.parse_dm_header(file)
     dmtag = fix_strings(dmtag)
     # display_keys(dmtag)
@@ -246,6 +252,7 @@ def load_image(file) -> DataAndMetadata.DataAndMetadata:
     while len(dimensional_calibrations) < data_descriptor.expected_dimension_count:
         dimensional_calibrations.append(Calibration.Calibration())
     intensity_calibration = Calibration.Calibration(intensity[0], intensity[1], intensity[2])
+    print("read time: {:8.2f}s".format(time.time()-start_time))
     return DataAndMetadata.new_data_and_metadata(data,
                                                  data_descriptor=data_descriptor,
                                                  dimensional_calibrations=dimensional_calibrations,
@@ -264,7 +271,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
     # we'll try the minimum: just an data list
     # doesn't work. Do we need a ImageSourceList too?
     # and a DocumentObjectList?
-
+    start_time = time.time()
     data = xdata.data
     data_descriptor = xdata.data_descriptor
     dimensional_calibrations = xdata.dimensional_calibrations
@@ -341,6 +348,7 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
     elif data_descriptor.collection_dimension_count == 2 and data_descriptor.datum_dimension_count == 1:
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum image"
         dm_metadata.setdefault("Meta Data", dict())["Signal"] = "EELS"
+        needs_slice = True
     elif data_descriptor.datum_dimension_count == 1:
         dm_metadata.setdefault("Meta Data", dict())["Format"] = "Spectrum"
     if (1 if data_descriptor.is_sequence else 0) + data_descriptor.collection_dimension_count == 1 or needs_slice:
@@ -358,7 +366,11 @@ def save_image(xdata: DataAndMetadata.DataAndMetadata, file):
         dm_metadata["TimezoneOffset"] = timezone_offset
     ret["ImageList"][0]["ImageTags"] = dm_metadata
     ret["InImageMode"] = True
+    end_time = time.time()
+    # print("prepare time: {:8.2f}s".format(end_time-start_time))
     parse_dm3.parse_dm_header(file, ret)
+    end_time2 = time.time()
+    print("write time: {:8.2f}s".format(end_time2-start_time))
 
 
 # logging.debug(image_tags['ImageData']['Calibrations'])
